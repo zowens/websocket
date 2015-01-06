@@ -13,8 +13,8 @@ import (
 func TestJSON(t *testing.T) {
 	var buf bytes.Buffer
 	c := fakeNetConn{&buf, &buf}
-	wc := newConn(c, true, 1024, 1024)
-	rc := newConn(c, false, 1024, 1024)
+	wc := newConn(c, true, 1024, 1024, true)
+	rc := newConn(c, false, 1024, 1024, false)
 
 	var actual, expect struct {
 		A int
@@ -39,8 +39,8 @@ func TestJSON(t *testing.T) {
 func TestDeprecatedJSON(t *testing.T) {
 	var buf bytes.Buffer
 	c := fakeNetConn{&buf, &buf}
-	wc := newConn(c, true, 1024, 1024)
-	rc := newConn(c, false, 1024, 1024)
+	wc := newConn(c, true, 1024, 1024, true)
+	rc := newConn(c, false, 1024, 1024, false)
 
 	var actual, expect struct {
 		A int

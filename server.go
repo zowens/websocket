@@ -46,6 +46,9 @@ type Upgrader struct {
 	// CheckOrigin is nil, the host in the Origin header must not be set or
 	// must match the host of the request.
 	CheckOrigin func(r *http.Request) bool
+
+	// In server mode, as an optimization copying of the written bytes can be disabled.
+	DisableCopy bool
 }
 
 func (u *Upgrader) returnError(w http.ResponseWriter, r *http.Request, status int, reason string) (*Conn, error) {
@@ -142,7 +145,7 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 		return nil, errors.New("websocket: client sent data before handshake is complete")
 	}
 
-	c := newConn(netConn, true, u.ReadBufferSize, u.WriteBufferSize)
+	c := newConn(netConn, true, u.ReadBufferSize, u.WriteBufferSize, !u.DisableCopy)
 	c.subprotocol = subprotocol
 
 	p := c.writeBuf[:0]

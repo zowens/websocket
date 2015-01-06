@@ -25,6 +25,7 @@ const (
 
 	defaultReadBufferSize  = 4096
 	defaultWriteBufferSize = 4096
+	defaultBytesBufferSize = 4
 
 	continuationFrame = 0
 	noFrame           = -1
@@ -146,6 +147,9 @@ type Conn struct {
 
 	// Message writer fields.
 	writeErr       error
+	writeAdtl      [][]byte // additional byte slices to write
+	writeZeroCopy  bool
+	writeAdtlLen   int
 	writeBuf       []byte // frame is constructed in this buffer.
 	writePos       int    // end of data in writeBuf.
 	writeFrameType int    // type of the current frame.
@@ -166,7 +170,7 @@ type Conn struct {
 	handlePing    func(string) error
 }
 
-func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int) *Conn {
+func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int, zeroCopy bool) *Conn {
 	mu := make(chan bool, 1)
 	mu <- true
 
@@ -183,6 +187,8 @@ func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int) 
 		conn:           conn,
 		mu:             mu,
 		readFinal:      true,
+		writeAdtl:      make([][]byte, 0, defaultBytesBufferSize),
+		writeZeroCopy:  zeroCopy,
 		writeBuf:       make([]byte, writeBufferSize+maxFrameHeaderSize),
 		writeFrameType: noFrame,
 		writePos:       maxFrameHeaderSize,
@@ -226,6 +232,19 @@ func (c *Conn) write(frameType int, deadline time.Time, bufs ...[]byte) error {
 
 	c.conn.SetWriteDeadline(deadline)
 	for _, buf := range bufs {
+		if len(buf) > 0 {
+			n, err := c.conn.Write(buf)
+			if n != len(buf) {
+				// Close on partial write.
+				c.conn.Close()
+			}
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	for _, buf := range c.writeAdtl {
 		if len(buf) > 0 {
 			n, err := c.conn.Write(buf)
 			if n != len(buf) {
@@ -327,7 +346,7 @@ func (c *Conn) NextWriter(messageType int) (io.WriteCloser, error) {
 }
 
 func (c *Conn) flushFrame(final bool, extra []byte) error {
-	length := c.writePos - maxFrameHeaderSize + len(extra)
+	length := c.writePos - maxFrameHeaderSize + len(extra) + c.writeAdtlLen
 
 	// Check for invalid control frames.
 	if isControl(c.writeFrameType) &&
@@ -386,6 +405,8 @@ func (c *Conn) flushFrame(final bool, extra []byte) error {
 	// Setup for next frame.
 	c.writePos = maxFrameHeaderSize
 	c.writeFrameType = continuationFrame
+	c.writeAdtl = c.writeAdtl[0:0:cap(c.writeAdtl)]
+	c.writeAdtlLen = 0
 	if final {
 		c.writeSeq++
 		c.writeFrameType = noFrame
@@ -434,6 +455,12 @@ func (w messageWriter) write(final bool, p []byte) (int, error) {
 		if err != nil {
 			return 0, err
 		}
+		return len(p), nil
+	}
+
+	if w.c.isServer && w.c.writeZeroCopy {
+		w.c.writeAdtl = append(w.c.writeAdtl, p)
+		w.c.writeAdtlLen += len(p)
 		return len(p), nil
 	}
 

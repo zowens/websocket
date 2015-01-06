@@ -34,7 +34,7 @@ func NewClient(netConn net.Conn, u *url.URL, requestHeader http.Header, readBufS
 	}
 	acceptKey := computeAcceptKey(challengeKey)
 
-	c = newConn(netConn, false, readBufSize, writeBufSize)
+	c = newConn(netConn, false, readBufSize, writeBufSize, false)
 	p := c.writeBuf[:0]
 	p = append(p, "GET "...)
 	p = append(p, u.RequestURI()...)

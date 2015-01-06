@@ -49,8 +49,8 @@ func TestFraming(t *testing.T) {
 		for _, chunker := range readChunkers {
 
 			var connBuf bytes.Buffer
-			wc := newConn(fakeNetConn{Reader: nil, Writer: &connBuf}, isServer, 1024, 1024)
-			rc := newConn(fakeNetConn{Reader: chunker.f(&connBuf), Writer: nil}, !isServer, 1024, 1024)
+			wc := newConn(fakeNetConn{Reader: nil, Writer: &connBuf}, isServer, 1024, 1024, isServer)
+			rc := newConn(fakeNetConn{Reader: chunker.f(&connBuf), Writer: nil}, !isServer, 1024, 1024, !isServer)
 
 			for _, n := range frameSizes {
 				for _, iocopy := range []bool{true, false} {
@@ -113,8 +113,8 @@ func TestControl(t *testing.T) {
 		for _, isWriteControl := range []bool{true, false} {
 			name := fmt.Sprintf("s:%v, wc:%v", isServer, isWriteControl)
 			var connBuf bytes.Buffer
-			wc := newConn(fakeNetConn{Reader: nil, Writer: &connBuf}, isServer, 1024, 1024)
-			rc := newConn(fakeNetConn{Reader: &connBuf, Writer: nil}, !isServer, 1024, 1024)
+			wc := newConn(fakeNetConn{Reader: nil, Writer: &connBuf}, isServer, 1024, 1024, isServer)
+			rc := newConn(fakeNetConn{Reader: &connBuf, Writer: nil}, !isServer, 1024, 1024, !isServer)
 			if isWriteControl {
 				wc.WriteControl(PongMessage, []byte(message), time.Now().Add(time.Second))
 			} else {
@@ -147,8 +147,8 @@ func TestCloseBeforeFinalFrame(t *testing.T) {
 	const bufSize = 512
 
 	var b1, b2 bytes.Buffer
-	wc := newConn(fakeNetConn{Reader: nil, Writer: &b1}, false, 1024, bufSize)
-	rc := newConn(fakeNetConn{Reader: &b1, Writer: &b2}, true, 1024, 1024)
+	wc := newConn(fakeNetConn{Reader: nil, Writer: &b1}, false, 1024, bufSize, false)
+	rc := newConn(fakeNetConn{Reader: &b1, Writer: &b2}, true, 1024, 1024, true)
 
 	w, _ := wc.NextWriter(BinaryMessage)
 	w.Write(make([]byte, bufSize+bufSize/2))
@@ -173,8 +173,8 @@ func TestEOFBeforeFinalFrame(t *testing.T) {
 	const bufSize = 512
 
 	var b1, b2 bytes.Buffer
-	wc := newConn(fakeNetConn{Reader: nil, Writer: &b1}, false, 1024, bufSize)
-	rc := newConn(fakeNetConn{Reader: &b1, Writer: &b2}, true, 1024, 1024)
+	wc := newConn(fakeNetConn{Reader: nil, Writer: &b1}, false, 1024, bufSize, false)
+	rc := newConn(fakeNetConn{Reader: &b1, Writer: &b2}, true, 1024, 1024, true)
 
 	w, _ := wc.NextWriter(BinaryMessage)
 	w.Write(make([]byte, bufSize+bufSize/2))
@@ -199,8 +199,8 @@ func TestReadLimit(t *testing.T) {
 	message := make([]byte, readLimit+1)
 
 	var b1, b2 bytes.Buffer
-	wc := newConn(fakeNetConn{Reader: nil, Writer: &b1}, false, 1024, readLimit-2)
-	rc := newConn(fakeNetConn{Reader: &b1, Writer: &b2}, true, 1024, 1024)
+	wc := newConn(fakeNetConn{Reader: nil, Writer: &b1}, false, 1024, readLimit-2, false)
+	rc := newConn(fakeNetConn{Reader: &b1, Writer: &b2}, true, 1024, 1024, true)
 	rc.SetReadLimit(readLimit)
 
 	// Send message at the limit with interleaved pong.
@@ -230,7 +230,7 @@ func TestReadLimit(t *testing.T) {
 func TestUnderlyingConn(t *testing.T) {
 	var b1, b2 bytes.Buffer
 	fc := fakeNetConn{Reader: &b1, Writer: &b2}
-	c := newConn(fc, true, 1024, 1024)
+	c := newConn(fc, true, 1024, 1024, true)
 	ul := c.UnderlyingConn()
 	if ul != fc {
 		t.Fatalf("Underlying conn is not what it should be.")
